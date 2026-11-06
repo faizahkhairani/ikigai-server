@@ -36,6 +36,7 @@ app.use('/api/admin/dashboard', dashboardRoutes);
 app.use('/api/admin/customers', customerRoutes);
 
 app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
+app.get('/', (req, res) => res.json({ status: 'ok' }));
 
 // 404 untuk endpoint yang tidak ada
 app.use((req, res) => {
