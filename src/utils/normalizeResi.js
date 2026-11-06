@@ -1,0 +1,1 @@
+export const normalizeResi = (resi) => resi.trim().toUpperCase();

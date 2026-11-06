@@ -1,0 +1,131 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model Admin {
+  id    String  @id
+  name  String
+  email String  @unique
+  role  String?
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  statusLogs   OrderStatusLog[]
+  proofImages  ProofImage[]
+
+  @@map("admins")
+}
+
+model Batch {
+  id        String    @id @default(uuid())
+  name      String
+  startDate DateTime  @map("start_date")
+  endDate   DateTime? @map("end_date")
+  status    String    @default("active") // "active" | "closed"
+  closedAt  DateTime? @map("closed_at")
+  quota     Int?
+  orders    Order[]
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  @@map("batches")
+}
+
+model Customer {
+  id        String   @id @default(uuid())
+  name      String
+  phone     String   @unique // normalized, e.g. 628123456789
+  address   String?
+  orders    Order[]
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("customers")
+}
+
+model Order {
+  id            String   @id @default(uuid())
+  trackingToken String   @unique @map("tracking_token")
+
+  customerId String   @map("customer_id")
+  customer   Customer @relation(fields: [customerId], references: [id])
+
+  batchId String @map("batch_id")
+  batch   Batch  @relation(fields: [batchId], references: [id])
+
+  orderType    String @map("order_type") // "sharing_bagasi" | "wa"
+  resiThailand String @unique @map("resi_thailand")
+
+  status String @default("WAITING")
+  // WAITING -> ARRIVED_THAILAND -> ARRIVED_INDONESIA -> SORTING ->
+  // PACKING_QUEUE -> PACKING -> READY_TO_SHIP -> SHIPPED -> COMPLETED
+  // non-linear: ISSUE, CANCELLED
+
+  paymentStatus String  @default("dp") @map("payment_status") // "unpaid" | "dp" | "lunas"
+  isHeld        Boolean @default(false) @map("is_held")
+  holdReason    String? @map("hold_reason")
+
+  items       OrderItem[]
+  statusLogs  OrderStatusLog[]
+  proofImages ProofImage[]
+  resiImagePath String? @map("resi_image_path")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([batchId, status])
+  @@index([status])
+  @@index([customerId])
+  @@map("orders")
+}
+
+model OrderItem {
+  id      String @id @default(uuid())
+  orderId String @map("order_id")
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  name    String
+  qty     Int    @default(1)
+  note    String?
+
+  @@map("order_items")
+}
+
+model OrderStatusLog {
+  id         String  @id @default(uuid())
+  orderId    String  @map("order_id")
+  order      Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  fromStatus String? @map("from_status")
+  toStatus   String  @map("to_status")
+
+  changedById String? @map("changed_by")
+  changedBy   Admin?  @relation(fields: [changedById], references: [id])
+
+  changedAt DateTime @default(now()) @map("changed_at")
+
+  @@index([orderId])
+  @@index([changedById])
+  @@map("order_status_logs")
+}
+
+// Foto bukti bisa cover banyak order sekaligus (1 foto tumpukan barang banyak customer)
+model ProofImage {
+  id       String @id @default(uuid())
+  imageUrl String @map("image_url")
+
+  orderId String @map("order_id")
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  uploadedById String @map("uploaded_by")
+  uploadedBy   Admin  @relation(fields: [uploadedById], references: [id])
+
+  uploadedAt DateTime @default(now()) @map("uploaded_at")
+
+  @@index([orderId])
+  @@index([uploadedById])
+  @@map("proof_images")
+}
+
