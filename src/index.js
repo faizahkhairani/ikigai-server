@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import cookieParser from 'cookie-parser';
 
 import orderRoutes from './routes/order.routes.js';
 import trackRoutes from './routes/track.routes.js';
@@ -9,12 +10,14 @@ import adminOrderRoutes from './routes/admin-order.routes.js';
 import adminRoutes from './routes/admin.routes.js'; 
 import customerRoutes from './routes/customer.routes.js'
 import dashboardRoutes from './routes/dashboard.routes.js';
+import authRoutes from './routes/auth.routes.js'
 
 dotenv.config();
 
 const app = express();
 
-app.use(cors({ origin: process.env.CLIENT_URL }));
+app.use(cors({ origin: process.env.CLIENT_URL, credentials: true }));
+app.use(cookieParser());
 app.use(express.json());
 app.use((req, res, next) => {
   req.body ??= {}; 
@@ -28,11 +31,12 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/track', trackRoutes);
 
+app.use('/api/auth', authRoutes);
+
 // Admin routes — requireAdminAuth dipasang di dalam masing-masing route file
 app.use('/api/admin/batches', batchRoutes);
 app.use('/api/admin/orders', adminOrderRoutes);
 app.use('/api/admin/dashboard', dashboardRoutes);
-
 app.use('/api/admin/customers', customerRoutes);
 
 app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
