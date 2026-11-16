@@ -16,6 +16,8 @@ dotenv.config();
 
 const app = express();
 
+app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
+
 app.use(cors({ origin: process.env.CLIENT_URL, credentials: true }));
 app.use(cookieParser());
 app.use(express.json());
@@ -23,6 +25,7 @@ app.use((req, res, next) => {
   req.body ??= {}; 
   next();
 });
+
 
 // api fetch data admin
 app.use('/api/admin', adminRoutes);
@@ -39,7 +42,6 @@ app.use('/api/admin/orders', adminOrderRoutes);
 app.use('/api/admin/dashboard', dashboardRoutes);
 app.use('/api/admin/customers', customerRoutes);
 
-app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
 app.get('/', (req, res) => res.json({ status: 'ok' }));
 
 // 404 untuk endpoint yang tidak ada
