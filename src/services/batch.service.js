@@ -1,4 +1,5 @@
 import prisma from '../lib/prisma.js';
+import { invalidateBatchCache } from './dashboard.service.js';
 
 export const listBatches = () => prisma.batch.findMany({ orderBy: { createdAt: 'desc' } });
 
@@ -12,16 +13,36 @@ export const openNewBatch = async ({ name, startDate, endDate, quota }) => {
     throw error;
   }
 
-  return prisma.batch.create({
-    data: { name, startDate: new Date(startDate), endDate: endDate ? new Date(endDate) : null, quota: quota ? Number(quota) : null  },
-  });
+  try {
+    const batch = await prisma.batch.create({
+      data: {
+        name,
+        startDate: new Date(startDate),
+        endDate: endDate ? new Date(endDate) : null,
+        quota: quota ? Number(quota) : null,
+      },
+    });
+    invalidateBatchCache();
+    return batch;
+  } catch (err) {
+    // Dua request barengan: yang kalah ditolak index database
+    if (err.code === 'P2002') {
+      const error = new Error('Sudah ada batch aktif. Tutup dulu sebelum buat batch baru.');
+      error.statusCode = 409;
+      throw error;
+    }
+    throw err;
+  }
 };
 
-export const closeBatch = (batchId) =>
-  prisma.batch.update({
+export const closeBatch = async (batchId) => {
+  const result = await prisma.batch.update({
     where: { id: batchId },
     data: { status: 'closed', closedAt: new Date() },
   });
+  invalidateBatchCache();
+  return result;
+};
 
 // Buka kembali batch yang sudah ditutup. Aturan satu batch aktif tetap berlaku.
 export const reopenBatch = async (batchId) => {
@@ -47,10 +68,12 @@ export const reopenBatch = async (batchId) => {
   }
 
   try {
-    return await prisma.batch.update({
+    const result = await prisma.batch.update({
       where: { id: batchId },
       data: { status: 'active', closedAt: null },
     });
+    invalidateBatchCache();
+    return result;
   } catch (err) {
     // Dua request barengan: yang kalah ditolak index database
     if (err.code === 'P2002') {

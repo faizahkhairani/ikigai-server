@@ -22,15 +22,43 @@ const BATCH_SELECT = { id: true, name: true, status: true, startDate: true };
 
 const zeroCounts = (keys) => Object.fromEntries(keys.map((key) => [key, 0]));
 
+const TTL_MS = 60_000;
+
+let defaultEntry = null; // hasil resolveBatch() tanpa batchId
+const byId = new Map(); // hasil resolveBatch(batchId)
+
+const isFresh = (entry) => entry && entry.expiresAt > Date.now();
+const wrap = (value) => ({ value, expiresAt: Date.now() + TTL_MS });
+
+// Panggil ini setiap batch berubah
+export const invalidateBatchCache = () => {
+  defaultEntry = null;
+  byId.clear();
+};
+
 // Tanpa batchId: batch aktif, kalau tidak ada yang aktif ambil batch terbaru
-const resolveBatch = async (batchId) => {
-  if (batchId) return prisma.batch.findUnique({ where: { id: batchId }, select: BATCH_SELECT });
+export const resolveBatch = async (batchId) => {
+  if (batchId) {
+    const hit = byId.get(batchId);
+    if (isFresh(hit)) return hit.value;
+
+    const value = await prisma.batch.findUnique({ where: { id: batchId }, select: BATCH_SELECT });
+    if (value) byId.set(batchId, wrap(value)); // null tidak di-cache, supaya id acak tidak menumpuk
+    return value;
+  }
+
+  if (isFresh(defaultEntry)) return defaultEntry.value;
 
   const active = await prisma.batch.findFirst({
     where: { status: 'active' },
     select: BATCH_SELECT,
   });
-  return active ?? prisma.batch.findFirst({ orderBy: { createdAt: 'desc' }, select: BATCH_SELECT });
+  const value =
+    active ??
+    (await prisma.batch.findFirst({ orderBy: { createdAt: 'desc' }, select: BATCH_SELECT }));
+
+  defaultEntry = wrap(value);
+  return value;
 };
 
 export const getDashboardSummary = async (batchId) => {
