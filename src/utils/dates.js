@@ -1,5 +1,5 @@
 const JAKARTA_OFFSET_MS = 7 * 60 * 60 * 1000; // WIB
-const DAY_MS = 24 * 60 * 60 * 1000;
+export const DAY_MS = 24 * 60 * 60 * 1000;
 
 export const startOfTodayJakarta = (now = new Date()) => {
   const jakartaMs = now.getTime() + JAKARTA_OFFSET_MS;
