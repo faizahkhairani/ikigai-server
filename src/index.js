@@ -66,6 +66,14 @@ app.use((err, req, res, next) => {
 
 app.set('trust proxy', 1);
 const PORT = process.env.PORT || 4000;
-app.listen(PORT, () => {
-  console.log(`Ikigai server jalan di http://localhost:${PORT}`);
-});
+// app.listen(PORT, () => {
+//   console.log(`Ikigai server jalan di http://localhost:${PORT}`);
+// });
+
+if (process.env.NODE_ENV !== 'production') {
+  app.listen(PORT, () => {
+    console.log(`Ikigai server jalan di http://localhost:${PORT}`);
+  });
+}
+
+export default app;
