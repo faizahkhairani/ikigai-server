@@ -16,15 +16,6 @@ dotenv.config();
 
 const app = express();
 
-app.use((req, res) => {
-  console.log('404 ->', req.method, req.originalUrl);
-  res.status(404).json({
-    error: 'Endpoint tidak ditemukan',
-    method: req.method,
-    path: req.originalUrl,
-  });
-});
-
 app.use(cors({ origin: process.env.CLIENT_URL, credentials: true }));
 app.use(cookieParser());
 app.use(express.json());
@@ -49,11 +40,16 @@ app.use('/api/admin/orders', adminOrderRoutes);
 app.use('/api/admin/dashboard', dashboardRoutes);
 app.use('/api/admin/customers', customerRoutes);
 
-app.get('/', (req, res) => res.json({ status: 'ok' }));
+app.get('/health', (req, res) => res.json({ status: 'ok' }));
 
 // 404 untuk endpoint yang tidak ada
 app.use((req, res) => {
-  res.status(404).json({ error: 'Endpoint tidak ditemukan' });
+  console.log('404 ->', req.method, req.originalUrl);
+  res.status(404).json({
+    error: 'Endpoint tidak ditemukan',
+    method: req.method,
+    path: req.originalUrl,
+  });
 });
 
 app.use((err, req, res, next) => {
