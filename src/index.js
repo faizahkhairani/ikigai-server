@@ -16,7 +16,14 @@ dotenv.config();
 
 const app = express();
 
-app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
+app.use((req, res) => {
+  console.log('404 ->', req.method, req.originalUrl);
+  res.status(404).json({
+    error: 'Endpoint tidak ditemukan',
+    method: req.method,
+    path: req.originalUrl,
+  });
+});
 
 app.use(cors({ origin: process.env.CLIENT_URL, credentials: true }));
 app.use(cookieParser());
