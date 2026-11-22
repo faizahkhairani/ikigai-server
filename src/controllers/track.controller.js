@@ -1,4 +1,5 @@
 import * as orderService from '../services/order.service.js';
+import { buildPagination, parsePagination } from '../utils/queryParams.js';
 
 export const trackByToken = async (req, res) => {
   const order = await orderService.getOrderByTrackingToken(req.params.token);
@@ -14,6 +15,12 @@ export const trackByResiOrPhone = async (req, res) => {
     return res.status(400).json({ error: 'Masukkan nomor resi atau nomor WA' });
   }
 
-  const orders = await orderService.findOrdersByResiOrPhone({ resi, phone });
-  return res.json({ orders });
+  const { page, pageSize } = parsePagination(req.query);
+  const { orders, total } = await orderService.findOrdersByResiOrPhone({
+    resi,
+    phone,
+    page,
+    pageSize,
+  });
+  return res.json({ orders, pagination: buildPagination({ page, pageSize, total }) });
 };

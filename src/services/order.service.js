@@ -256,25 +256,37 @@ const ORDER_TRACKING_SELECT = {
   proofImages: { orderBy: { uploadedAt: 'asc' }, select: { id: true, imageUrl: true } },
 };
 
+
+export const getOrderByTrackingToken = (token) =>
+  prisma.order.findUnique({ where: { trackingToken: token }, select: ORDER_TRACKING_SELECT });
+
 const ORDER_TRACKING_LIST_SELECT = {
   trackingToken: true,
   resiThailand: true,
   status: true,
   createdAt: true,
+  batch: { select: { id: true, name: true } },
+  customer: { select: {id: true, name: true } },
   _count: { select: { items: true } },
 };
+export const findOrdersByResiOrPhone = async ({ resi, phone, page, pageSize }) => {
+  const where = resi
+    ? { resiThailand: normalizeResi(resi) }
+    : { customer: { phone: normalizePhone(phone) } };
 
-export const getOrderByTrackingToken = (token) =>
-  prisma.order.findUnique({ where: { trackingToken: token }, select: ORDER_TRACKING_SELECT });
+  const [orders, total] = await prisma.$transaction([
+    prisma.order.findMany({
+      where,
+      select: ORDER_TRACKING_LIST_SELECT,
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+    }),
+    prisma.order.count({ where }),
+  ]);
 
-export const findOrdersByResiOrPhone = ({ resi, phone }) =>
-  prisma.order.findMany({
-    where: resi
-      ? { resiThailand: normalizeResi(resi) }
-      : { customer: { phone: normalizePhone(phone) } },
-    select: ORDER_TRACKING_LIST_SELECT,
-    orderBy: { createdAt: 'desc' },
-  });
+  return { orders, total };
+};
 
 export const findOrdersForAdmin = async ({
   batchId,
