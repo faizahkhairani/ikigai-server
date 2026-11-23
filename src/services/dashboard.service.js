@@ -1,3 +1,4 @@
+import { customerLabel } from '../utils/customerLabel.js';
 import prisma from '../lib/prisma.js';
 import { startOfTodayJakarta, DAY_MS } from '../utils/dates.js';
 
@@ -160,7 +161,7 @@ export const getDashboardSummary = async (batchId) => {
           resiThailand: true,
           status: true,
           createdAt: true,
-          customer: { select: { name: true } },
+          customer: { select: { name: true, identifier: true, phone: true } },
           _count: { select: { items: true } },
         },
       }),
@@ -177,7 +178,7 @@ export const getDashboardSummary = async (batchId) => {
           status: true,
           paymentStatus: true,
           createdAt: true,
-          customer: { select: { name: true } },
+          customer: { select: { name: true, identifier: true, phone: true } },
           statusLogs: {
             orderBy: { changedAt: 'desc' },
             take: 1,
@@ -248,7 +249,7 @@ export const getDashboardSummary = async (batchId) => {
     todayOrders: todayOrders.map((order) => ({
       id: order.id,
       resi: order.resiThailand,
-      customerName: order.customer.name,
+      customerName: customerLabel(order.customer),
       itemCount: order._count.items,
       status: order.status,
       createdAt: order.createdAt,
@@ -259,7 +260,7 @@ export const getDashboardSummary = async (batchId) => {
       .map((order) => ({
         id: order.id,
         resi: order.resiThailand,
-        customerName: order.customer.name,
+        customerName: customerLabel(order.customer),
         status: order.status,
         paymentStatus: order.paymentStatus,
         reason: order.status === 'ISSUE' ? 'ISSUE' : 'HOLD',

@@ -16,7 +16,13 @@ dotenv.config();
 
 const app = express();
 
-app.use(cors({ origin: process.env.CLIENT_URL, credentials: true }));
+app.use(
+  cors({
+    origin: process.env.CLIENT_URL,
+    credentials: true,
+    exposedHeaders: ['Content-Disposition'], // biar frontend bisa baca nama file download
+  })
+);
 app.use(cookieParser());
 app.use(express.json());
 app.use((req, res, next) => {

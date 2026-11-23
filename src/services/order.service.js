@@ -10,6 +10,9 @@ import {
   uploadResiImage,
 } from '../lib/supabaseStorage.js';
 import { getPresetStart } from '../utils/dates.js';
+import { normalizeIdentifier } from '../utils/normalizeIdentifier.js';
+import { escapeLike } from '../utils/escapeLike.js';
+import supabaseAdmin from '../lib/supabaseStorage.js';
 
 
 const PAYMENT_GATE_STATUSES = ['READY_TO_SHIP', 'SHIPPED', 'COMPLETED'];
@@ -64,13 +67,51 @@ const assertResiAvailable = async (resiThailand) => {
   }
 };
 
-const findOrCreateCustomer = ({ name, phone, updateName }) => {
-  const normalizedPhone = normalizePhone(phone);
-  return prisma.customer.upsert({
-    where: { phone: normalizedPhone },
-    update: updateName ? { name } : {},
-    create: { name, phone: normalizedPhone },
+const conflictError = (message) => Object.assign(new Error(message), { statusCode: 409 });
+
+// Form publik: identifier satu-satunya kunci
+const findOrCreateCustomerByIdentifier = (identifier) =>
+  prisma.customer.upsert({
+    where: { identifier },
+    // Sengaja tidak kosong: dengan update {} Prisma tidak memakai ON CONFLICT, dan dua order
+    // pertama yang masuk barengan bisa gagal di unique constraint
+    update: { identifier },
+    create: { identifier },
   });
+
+// Input manual: identifier dan/atau no WA. Kunci yang masih kosong di customer lama dilengkapi,
+// tapi kunci yang sudah terisi tidak pernah ditimpa dari sini (ubahnya lewat Edit customer).
+const findOrCreateCustomerByContact = async ({ name, identifier, phone: rawPhone }) => {
+  const phone = rawPhone ? normalizePhone(rawPhone) : undefined;
+
+  const [byIdentifier, byPhone] = await Promise.all([
+    identifier ? prisma.customer.findUnique({ where: { identifier } }) : null,
+    phone ? prisma.customer.findUnique({ where: { phone } }) : null,
+  ]);
+
+  if (byIdentifier && byPhone && byIdentifier.id !== byPhone.id) {
+    throw conflictError('Identifier dan no WA terdaftar di dua customer yang berbeda');
+  }
+
+  const existing = byIdentifier ?? byPhone;
+  if (identifier && existing?.identifier && existing.identifier !== identifier) {
+    throw conflictError(`No WA ini sudah terdaftar dengan identifier "${existing.identifier}"`);
+  }
+  if (phone && existing?.phone && existing.phone !== phone) {
+    throw conflictError(`Identifier ini sudah terdaftar dengan no WA ${existing.phone}`);
+  }
+
+  // Yang undefined dilewati Prisma: tidak menimpa data lama, dan jadi NULL untuk customer baru
+  const data = { name, identifier, phone };
+  try {
+    return existing
+      ? await prisma.customer.update({ where: { id: existing.id }, data })
+      : await prisma.customer.create({ data });
+  } catch (err) {
+    // Request lain membuat customer yang sama di antara pengecekan dan penyimpanan
+    if (err.code === 'P2002') throw conflictError('Customer baru saja dibuat, coba simpan lagi');
+    throw err;
+  }
 };
 
 const getActiveBatchOrThrow = async () => {
@@ -115,7 +156,7 @@ export const deleteResiImage = async (path) => {
   if (error) throw error;
 };
 
-export const createPublicOrder = async ({ name, phone, resiThailand, items, image }) => {
+export const createPublicOrder = async ({ identifier, resiThailand, items, image }) => {
   const resi = normalizeResi(resiThailand);
 
   // Dua pengecekan ini tidak saling bergantung, jalan bersamaan
@@ -131,7 +172,7 @@ export const createPublicOrder = async ({ name, phone, resiThailand, items, imag
       buffer: image.buffer,
       mimeType: image.mimetype,
     }),
-    findOrCreateCustomer({ name, phone, updateName: false }),
+    findOrCreateCustomerByIdentifier(identifier),
   ]);
 
   if (uploadResult.status === 'rejected' || customerResult.status === 'rejected') {
@@ -203,7 +244,15 @@ export const getOrderAvailability = async () => {
 //   });
 // };
 
-export const createManualOrder = async ({ name, phone, resiThailand, items, batchId, adminId }) => {
+export const createManualOrder = async ({
+  name,
+  identifier,
+  phone,
+  resiThailand,
+  items,
+  batchId,
+  adminId,
+}) => {
   const resi = normalizeResi(resiThailand);
 
   // Resi dicek dulu: kalau dobel, tolak sebelum customer dibuat atau namanya ditimpa
@@ -213,7 +262,7 @@ export const createManualOrder = async ({ name, phone, resiThailand, items, batc
     batchId
       ? prisma.batch.findUniqueOrThrow({ where: { id: batchId } })
       : getActiveBatchOrThrow(),
-    findOrCreateCustomer({ name, phone, updateName: true }),
+    findOrCreateCustomerByContact({ name, identifier, phone }),
   ]);
 
   try {
@@ -250,7 +299,7 @@ const ORDER_TRACKING_SELECT = {
   isHeld: true,
   holdReason: true,
   createdAt: true,
-  customer: { select: { name: true } },
+  customer: { select: { name: true, identifier: true } },
   items: { select: { id: true, name: true, qty: true, note: true } },
   statusLogs: { orderBy: { changedAt: 'asc' }, select: { toStatus: true, changedAt: true } },
   proofImages: { orderBy: { uploadedAt: 'asc' }, select: { id: true, imageUrl: true } },
@@ -266,13 +315,20 @@ const ORDER_TRACKING_LIST_SELECT = {
   status: true,
   createdAt: true,
   batch: { select: { id: true, name: true } },
-  customer: { select: {id: true, name: true } },
+  customer: { select: { id: true, name: true, identifier: true } },
   _count: { select: { items: true } },
 };
-export const findOrdersByResiOrPhone = async ({ resi, phone, page, pageSize }) => {
-  const where = resi
-    ? { resiThailand: normalizeResi(resi) }
-    : { customer: { phone: normalizePhone(phone) } };
+
+const trackingWhere = ({ resi, phone, identifier }) => {
+  if (resi) return { resiThailand: normalizeResi(resi) };
+  if (phone) return { customer: { phone: normalizePhone(phone) } };
+  // startsWith sudah termasuk yang persis sama; hasilnya boleh dari beberapa customer
+  return { customer: { identifier: { startsWith: escapeLike(identifier) } } };
+};
+
+// identifier harus sudah dinormalisasi dan tidak kosong
+export const findOrdersForTracking = async ({ resi, phone, identifier, page, pageSize }) => {
+  const where = trackingWhere({ resi, phone, identifier });
 
   const [orders, total] = await prisma.$transaction([
     prisma.order.findMany({
@@ -298,6 +354,7 @@ export const findOrdersForAdmin = async ({
   pageSize,
 }) => {
   const createdFrom = getPresetStart(datePreset);
+  const identifierQuery = search ? normalizeIdentifier(search) : '';
   const where = {
     ...(batchId && { batchId }),
     ...(status && { status }),
@@ -308,6 +365,9 @@ export const findOrdersForAdmin = async ({
         { resiThailand: { contains: search, mode: 'insensitive' } },
         { customer: { name: { contains: search, mode: 'insensitive' } } },
         { customer: { phone: { contains: search } } },
+        ...(identifierQuery
+          ? [{ customer: { identifier: { contains: escapeLike(identifierQuery) } } }]
+          : []),
       ],
     }),
   };

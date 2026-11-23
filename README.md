@@ -46,7 +46,7 @@ src/
 | POST | `/api/orders` | Tidak |
 | GET | `/api/orders/availability` | Tidak |
 | GET | `/api/track/:token` | Tidak |
-| GET | `/api/track?resi=` atau `?phone=` (opsional: `page`, `pageSize`; default `1`, `20`, maksimal `100`) | Tidak |
+| GET | `/api/track?resi=`, `?phone=`, atau `?identifier=` (identifier: persis sama atau diawali; opsional: `page`, `pageSize`; default `1`, `20`, maksimal `100`) | Tidak |
 | POST | `/api/auth/login`, `/api/auth/refresh`, `/api/auth/logout` | Tidak |
 | GET | `/api/auth/me`, `/api/admin/me` | Admin |
 | GET, POST | `/api/admin/batches` | Admin |
@@ -71,8 +71,7 @@ Pilih **Body → form-data**:
 
 | Key | Type | Contoh |
 |---|---|---|
-| `name` | Text | `Budi Santoso` |
-| `phone` | Text | `081234567890` |
+| `identifier` | Text | `adhya0160` (username WA + 4 digit / X / IG) |
 | `resiThailand` | Text | `TH123456789` |
 | `items` | Text | `[{"name":"Sepatu","qty":1,"note":"Warna hitam"}]` |
 | `image` | File | Pilih foto bukti resi (JPG, PNG, atau WebP, maksimal 5 MB) |
@@ -115,6 +114,7 @@ Pilih **Body → raw → JSON**:
 ```json
 {
   "name": "Budi Santoso",
+  "identifier": "adhya0160",
   "phone": "081234567890",
   "resiThailand": "TH123456789",
   "items": [
@@ -127,6 +127,8 @@ Pilih **Body → raw → JSON**:
   "batchId": "UUID_BATCH"
 }
 ```
+
+`name`, `identifier`, dan `phone` opsional, tapi minimal salah satu dari `identifier` atau `phone` wajib diisi.
 
 `batchId` opsional; jika tidak dikirim, order masuk ke batch yang sedang aktif.
 
@@ -191,8 +193,11 @@ Kirim tanpa body untuk endpoint berikut:
 ```json
 {
   "name": "Budi Santoso",
+  "identifier": "adhya0160",
   "phone": "081234567890",
   "address": "Jl. Contoh No. 1"
 }
 ```
+
+Semua field dikirim lengkap: field yang kosong atau tidak dikirim akan dikosongkan. Minimal `identifier` atau `phone` harus terisi.
 

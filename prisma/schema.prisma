@@ -37,12 +37,14 @@ model Batch {
 }
 
 model Customer {
-  id        String   @id @default(uuid())
-  name      String
-  phone     String   @unique // normalized, e.g. 628123456789
-  address   String?
-  orders    Order[]
-  createdAt DateTime @default(now()) @map("created_at")
+  id         String   @id @default(uuid())
+  // Identifier & phone: unique tapi boleh NULL (NULL tidak dianggap duplikat). Jangan simpan "".
+  identifier String?  @unique // normalized, e.g. adhya0160 (username WA + 4 digit / X / IG)
+  name       String?
+  phone      String?  @unique // normalized, e.g. 628123456789
+  address    String?
+  orders     Order[]
+  createdAt  DateTime @default(now()) @map("created_at")
 
   @@map("customers")
 }

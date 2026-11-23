@@ -1,4 +1,5 @@
 import * as orderService from '../services/order.service.js';
+import { normalizeIdentifier } from '../utils/normalizeIdentifier.js';
 import { buildPagination, parsePagination } from '../utils/queryParams.js';
 
 export const trackByToken = async (req, res) => {
@@ -7,18 +8,24 @@ export const trackByToken = async (req, res) => {
   return res.json({ order });
 };
 
-export const trackByResiOrPhone = async (req, res) => {
+// GET /api/track?resi= | ?phone= | ?identifier= (&page=&pageSize=)
+export const searchTrackedOrders = async (req, res) => {
   const resi = typeof req.query.resi === 'string' ? req.query.resi.trim() : '';
   const phone = typeof req.query.phone === 'string' ? req.query.phone.trim() : '';
 
-  if (!resi && !phone) {
-    return res.status(400).json({ error: 'Masukkan nomor resi atau nomor WA' });
+  // Dinormalisasi sebelum dicek: "@" saja jadi kosong, dan awalan kosong cocok ke semua customer
+  const identifier =
+    typeof req.query.identifier === 'string' ? normalizeIdentifier(req.query.identifier) : '';
+
+  if (!resi && !phone && !identifier) {
+    return res.status(400).json({ error: 'Masukkan nomor resi, nomor WA, atau username' });
   }
 
   const { page, pageSize } = parsePagination(req.query);
-  const { orders, total } = await orderService.findOrdersByResiOrPhone({
+  const { orders, total } = await orderService.findOrdersForTracking({
     resi,
     phone,
+    identifier,
     page,
     pageSize,
   });

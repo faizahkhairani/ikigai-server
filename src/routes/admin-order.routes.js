@@ -7,6 +7,7 @@ const router = Router();
 router.use(requireAdminAuth); // semua route di sini wajib login admin
 
 router.get('/', orderController.listOrdersForAdmin);
+router.get('/export', orderController.exportOrdersBackup); // harus sebelum '/:id'
 
 router.post('/', orderController.createManualOrder);
 

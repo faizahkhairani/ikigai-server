@@ -1,6 +1,7 @@
 import * as orderService from '../services/order.service.js';
 import { buildPagination, parsePagination, toOptionalString } from '../utils/queryParams.js';
-import { parseOrderInput } from '../utils/orderInput.js';
+import { parseManualOrderInput, parsePublicOrderInput } from '../utils/orderInput.js';
+import { buildOrdersBackupWorkbook, jakartaDateStamp } from '../services/orderExport.service.js';
 
 const MAX_BULK_SIZE = 100;
 
@@ -16,7 +17,7 @@ export const getAvailability = async (req, res) => {
   return res.json(await orderService.getOrderAvailability());
 };
 
-// POST /api/orders — form publik (multipart: image + name, phone, resiThailand, items)
+// POST /api/orders — form publik (multipart: image + identifier, resiThailand, items)
 export const submitPublicOrder = async (req, res) => {
   let rawItems;
   try {
@@ -25,7 +26,7 @@ export const submitPublicOrder = async (req, res) => {
     rawItems = null;
   }
 
-  const { data, error } = parseOrderInput({ ...req.body, items: rawItems });
+  const { data, error } = parsePublicOrderInput({ ...req.body, items: rawItems });
   if (error) return res.status(400).json({ error });
   if (!req.file) return res.status(400).json({ error: 'Foto bukti resi wajib diunggah' });
 
@@ -40,7 +41,7 @@ export const submitPublicOrder = async (req, res) => {
 
 // POST /api/admin/orders — input manual oleh admin (order dari WA)
 export const createManualOrder = async (req, res) => {
-  const { data, error } = parseOrderInput(req.body);
+  const { data, error } = parseManualOrderInput(req.body);
   if (error) return res.status(400).json({ error });
 
   const batchId =
@@ -70,6 +71,22 @@ export const listOrdersForAdmin = async (req, res) => {
 
   return res.json({ orders, pagination: buildPagination({ page, pageSize, total }) });
   
+};
+
+// GET /api/admin/orders/export — backup semua order ke .xlsx (sheet Ringkasan + 1 sheet per batch)
+export const exportOrdersBackup = async (req, res) => {
+  const now = new Date();
+  const workbook = await buildOrdersBackupWorkbook(now);
+  const filename = `ikigai-backup-${jakartaDateStamp(now)}.xlsx`;
+
+  res.setHeader(
+    'Content-Type',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+  );
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+  res.setHeader('Cache-Control', 'no-store');
+  await workbook.xlsx.write(res);
+  res.end();
 };
 
 // POST /api/admin/orders/:id/correct-status

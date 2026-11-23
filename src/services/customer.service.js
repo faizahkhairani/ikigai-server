@@ -1,15 +1,21 @@
 import prisma from '../lib/prisma.js';
+import { escapeLike } from '../utils/escapeLike.js';
+import { normalizeIdentifier } from '../utils/normalizeIdentifier.js';
 import { normalizePhone } from '../utils/normalizePhone.js';
 
 export const findCustomersForAdmin = async ({ search, page, pageSize }) => {
   // Admin ngetik 0812..., di database tersimpan 62812...
   const digits = search ? search.replace(/\D/g, '') : '';
+  const identifierQuery = search ? normalizeIdentifier(search) : '';
   const phoneQuery = digits.startsWith('0') ? `62${digits.slice(1)}` : digits;
 
   const where = search
     ? {
         OR: [
           { name: { contains: search, mode: 'insensitive' } },
+          ...(identifierQuery
+            ? [{ identifier: { contains: escapeLike(identifierQuery) } }]
+            : []),
           ...(phoneQuery ? [{ phone: { contains: phoneQuery } }] : []),
         ],
       }
@@ -20,6 +26,7 @@ export const findCustomersForAdmin = async ({ search, page, pageSize }) => {
       where,
       select: {
         id: true,
+        identifier: true,
         name: true,
         phone: true,
         address: true,
@@ -43,6 +50,7 @@ export const getCustomerDetail = (customerId) =>
     where: { id: customerId },
     select: {
       id: true,
+      identifier: true,
       name: true,
       phone: true,
       address: true,
@@ -64,16 +72,25 @@ export const getCustomerDetail = (customerId) =>
 
 const httpError = (statusCode, message) => Object.assign(new Error(message), { statusCode });
 
-export const updateCustomer = async (customerId, { name, phone, address }) => {
+export const updateCustomer = async (customerId, { name, identifier, phone, address }) => {
   try {
     return await prisma.customer.update({
       where: { id: customerId },
-      data: { name, phone: normalizePhone(phone), address },
-      select: { id: true, name: true, phone: true, address: true },
+      // Field yang dikosongkan admin harus null: undefined artinya "jangan diubah" bagi Prisma
+      data: {
+        name: name ?? null,
+        identifier: identifier ?? null,
+        phone: phone ? normalizePhone(phone) : null,
+        address: address ?? null,
+      },
+      select: { id: true, identifier: true, name: true, phone: true, address: true },
     });
   } catch (err) {
     if (err.code === 'P2025') throw httpError(404, 'Customer tidak ditemukan');
-    if (err.code === 'P2002') throw httpError(409, 'No WA sudah dipakai customer lain');
+    if (err.code === 'P2002') {
+      const field = err.meta?.target?.includes('identifier') ? 'Identifier' : 'No WA';
+      throw httpError(409, `${field} sudah dipakai customer lain`);
+    }
     throw err;
   }
 };

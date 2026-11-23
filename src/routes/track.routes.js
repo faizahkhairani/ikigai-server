@@ -14,6 +14,6 @@ const trackLimiter = rateLimit({
 router.use(trackLimiter);
 
 router.get('/:token', trackController.trackByToken);
-router.get('/', trackController.trackByResiOrPhone);
+router.get('/', trackController.searchTrackedOrders);
 
 export default router;
