@@ -348,6 +348,7 @@ export const findOrdersForAdmin = async ({
   batchId,
   status,
   orderType,
+  isHeld,
   search,
   datePreset,
   page,
@@ -359,6 +360,7 @@ export const findOrdersForAdmin = async ({
     ...(batchId && { batchId }),
     ...(status && { status }),
     ...(orderType && { orderType }),
+    ...(isHeld && { isHeld }),
     ...(createdFrom && { createdAt: { gte: createdFrom } }),
     ...(search && {
       OR: [

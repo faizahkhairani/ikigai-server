@@ -55,7 +55,7 @@ export const createManualOrder = async (req, res) => {
   }
 };
 
-// GET /api/admin/orders?page=&pageSize=&batchId=&status=&orderType=&search=
+// GET /api/admin/orders?page=&pageSize=&batchId=&status=&orderType=&isHeld=true&search=
 export const listOrdersForAdmin = async (req, res) => {
   const { page, pageSize } = parsePagination(req.query);
 
@@ -63,6 +63,7 @@ export const listOrdersForAdmin = async (req, res) => {
     batchId: toOptionalString(req.query.batchId),
     status: toOptionalString(req.query.status),
     orderType: toOptionalString(req.query.orderType),
+    isHeld: toOptionalString(req.query.isHeld) === 'true' ? true : undefined,
     search: toOptionalString(req.query.search),
     datePreset: toOptionalString(req.query.date),
     page,
